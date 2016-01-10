@@ -201,12 +201,12 @@ library(rattle)
 library(rpart.plot)
 library(RColorBrewer)
 library(neuralnet)
+library(nnet)
 library(e1071)
 library(caret)
 library(randomForest)
 library(party)
 library(caret)
-
 
 
 #Applying Decision trees
@@ -244,21 +244,7 @@ fit <- cforest(as.factor(Survived) ~ Pclass + Sex + Age + SibSp + Parch + Fare +
 Pred_cf <- predict(fit, dataVal, OOB=TRUE, type = "response")
 Conf_CForest <- confusionMatrix(Pred_cf, dataVal$Survived)
 
-#Applying Neural network
-m <- model.matrix( ~ Survived + Pclass + Sex + Age + SibSp + Parch + Fare, data = dataTrain)
-net <- neuralnet(Survived ~ Sexmale + Age + Pclass + SibSp + Parch, data=m, hidden = 10, threshold = 0.1)
-plot(net)
 
-dataVal_temp<-subset(dataVal,select=c("Pclass","Sex","Age","SibSp","Parch","Fare"))
-factor(dataVal_temp$Sex, c("male", "female"), labels = c(1, 0))
-n <- model.matrix( ~ Pclass + Sex + Age + SibSp + Parch + Fare, data = dataVal_temp)
-prediction<-compute(net, n[,2:6])
-
-for(i in 1:length(prediction$net.result)){
-  if(prediction$net.result[i]>0.6){prediction$net.result[i]<-1}
-  else{prediction$net.result[i]<-0}
-}
-conf_Neuralnet <- confusionMatrix(prediction$net.result, dataVal$Survived)
 
 
 #SVM modelling
@@ -269,17 +255,36 @@ train_svm<-dataTrain[,c("Age","Sex","Pclass","SibSp","Parch","Survived")]
 svm.model<-svm(Survived ~ . , data = train_svm, kernel="radial")
 
 dataVal_svm<-dataVal[,c("Age","Sex","Pclass","SibSp","Parch")]
-dataVal_svm$Fare[is.na(dataVal_svm$Fare)] <- mean(dataVal_svm$Fare, na.rm=TRUE)
+#dataVal_svm$Fare[is.na(dataVal_svm$Fare)] <- mean(dataVal_svm$Fare, na.rm=TRUE)
 preds<-predict(svm.model, dataVal_svm)
 
-for(i in 1:length(preds)){
-  if(preds[i]>0.5){preds[i]<-1}
-  else{preds[i]<-0}
-}
 
 conf_Svm  <- confusionMatrix(preds, dataVal$Survived)
 
 
+#Applying Neural network
+
+nnet1 = nnet(Survived ~ Sex + Pclass + Fare + Age + SibSp, 
+             data=dataTrain, size = 2, rang = 0.1,
+             decay = 5e-4, maxit = 200)
+
+prediction$net.result = predict(nnet1, dataVal)
+
+for(i in 1:length(prediction$net.result)){
+  if(prediction$net.result[i]>0.6){prediction$net.result[i]<-1}
+  else{prediction$net.result[i]<-0}
+}
+conf_Neuralnet <- confusionMatrix(prediction$net.result, dataVal$Survived)
+
+
+# Comparison of predictions from each model
+compare_df <- data.frame(Accuracy = c(conf_Tree$overall[1], 
+                                      Conf_RForest$overall[1], 
+                                      Conf_CForest$overall[1],
+                                      conf_Svm$overall[1],
+                                      conf_Neuralnet$overall[1]),
+                         row.names = c("rpart", "rf", "cforest", "svm", "neuralnet"))
+compare_df
 
 ```
 
@@ -381,37 +386,63 @@ dataValfe$FamilyCat <- as.factor(dataValfe$FamilyCat)
 
 ```{r}
 #Applying Decision trees
-fit <- rpart(Survived~Pclass+Sex+CoW+FamilyCat+Title , data = dataTrainfe, method="class")
-fancyRpartPlot(fit)
+fit_fe <- rpart(Survived~Pclass+Sex+CoW+FamilyCat+Title , data = dataTrainfe, method="class")
+fancyRpartPlot(fit_fe)
 
-dataVal$pred_dt <- predict(fit, dataValfe[,-1], type = "class")
-conf_Tree <- confusionMatrix(dataValfe$pred_dt, dataValfe$Survived)
+dataValfe$pred_dt <- predict(fit_fe, dataValfe[,-1], type = "class")
+conf_Treefe <- confusionMatrix(dataValfe$pred_dt, dataValfe$Survived)
 #Confusion Matrix
 tab=with(dataValfe,table(True=Survived,Predicted=pred_dt))
 print(tab)
 #Accuracy
 sum(diag(tab)) / sum(tab)
 
+#Applying Neural network
 
+nnet1 = nnet(Survived~Pclass+Sex+CoW+FamilyCat+Title, 
+             data=dataTrainfe, size = 2, rang = 0.1,
+             decay = 5e-4, maxit = 200)
 
+prediction$net.result = predict(nnet1, dataValfe)
 
-
+for(i in 1:length(prediction$net.result)){
+  if(prediction$net.result[i]>0.6){prediction$net.result[i]<-1}
+  else{prediction$net.result[i]<-0}
+}
+conf_Neuralnet <- confusionMatrix(prediction$net.result, dataValfe$Survived)
 
 # Random Forests
 set.seed(415)
-fit2<- randomForest(as.factor(Survived) ~ Pclass+Sex+CoW+FamilyCat+Title, data=dataTrainfe,
-                    importance=TRUE, ntree=2000)
-varImpPlot(fit2)
+fit_rf<- randomForest(Survived~Pclass+Sex+CoW+FamilyCat+Title, data=dataTrainfe,type=classification, ntree=100,mtry=2)
 
-dataValfe$Pred_rf <- predict(fit2, dataValfe)
-Conf_RForest <- confusionMatrix(dataValfe$Pred_rf, dataValfe$Survived) 
-
-
+prediction$Pred_rffe <- predict(fit_rf,type="prob",dataValfe) [,2]
+for(i in 1:length(prediction$Pred_rffe )){
+  if(prediction$Pred_rffe[i]>0.6){prediction$Pred_rffe[i]<-1}
+  else{prediction$Pred_rffe[i]<-0}
+}
+Conf_RForestfe <- confusionMatrix(prediction$Pred_rffe, dataValfe$Survived) 
 
 #C- forest
 set.seed(415)
-fit <- cforest(as.factor(Survived) ~ Pclass+Sex+CoW+FamilyCat+Title, data = dataTrainfe, controls=cforest_unbiased(ntree=2000, mtry=3))
+fit_cf <- cforest(Survived~Pclass+Sex+CoW+FamilyCat+Title, data = dataTrainfe, controls=cforest_unbiased(ntree=2000, mtry=3))
 
-Pred_cf <- predict(fit, dataValfe, OOB=TRUE, type = "response")
-Conf_CForest <- confusionMatrix(Pred_cf, dataValfe$Survived)
+Predfe_cf <- predict(fit_cf, dataValfe, OOB=TRUE, type = "response")
+Conf_CForestfe <- confusionMatrix(Predfe_cf, dataValfe$Survived)
+
+
+
+
+#SVM modelling
+plot(dataTrainfe$Age, dataTrainfe$Pclass, xlab="Age", ylab="Pclass", col=ifelse(dataTrainfe$Survived==1, "red", "blue"))
+pairs(~Pclass+Sex+CoW+FamilyCat+Title,data=dataTrainfe, col=ifelse(dataTrainfe$Survived==1, "red", "blue"))
+
+
+svm.model.fe<-svm(Survived~Pclass+Sex+CoW+FamilyCat+Title , data = dataTrainfe, kernel="radial")
+
+preds<-predict(svm.model.fe, dataValfe)
+
+
+conf_Svmfe  <- confusionMatrix(preds, dataValfe$Survived)
+
+
 ```
