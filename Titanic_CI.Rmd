@@ -185,13 +185,7 @@ dataVal<-train[701:nrow(train),]
 ```
 What the above code means is that the first 700 rows of Train data are loaded into the data frame object "dataTrain" and the remaining rows are loaded into "dataVal", which is going to be the validation set.
 
-```{r, echo=FALSE}
-#Factoring the required sets
-factor(train$Sex, c("male", "female"), labels = c(1, 0))
-factor(test$Sex, c("male", "female"), labels = c(1, 0))
-factor(train$Embarked, c("C", "Q","S"), labels = c(1, 2,3))
-factor(test$Embarked, c("C", "Q","S"), labels = c(1, 2,3))
-```
+
 
 ```{r, warning=FALSE}
 #------------Model fitting Starts here-------------------------------#
@@ -255,7 +249,6 @@ train_svm<-dataTrain[,c("Age","Sex","Pclass","SibSp","Parch","Survived")]
 svm.model<-svm(Survived ~ . , data = train_svm, kernel="radial")
 
 dataVal_svm<-dataVal[,c("Age","Sex","Pclass","SibSp","Parch")]
-#dataVal_svm$Fare[is.na(dataVal_svm$Fare)] <- mean(dataVal_svm$Fare, na.rm=TRUE)
 preds<-predict(svm.model, dataVal_svm)
 
 
@@ -297,13 +290,21 @@ train$Child <- ifelse(train$Age<=18,1,0)
 So anyone who is less than 18 years are considered to be children. Children are mosty likely to be rescued first - let's check it out.
 
 ```{r}
+train$Child <- as.factor(train$Child)
+train$Survived <- as.factor(train$Survived)
 table(train$Child, train$Survived)
+plot(train$Child, train$Survived)
 ```
 
 Looks like it doesn't it - there is a ~50% chance that you survive if you are a child.
 
 ```{r}
+train$Sex <- as.factor(train$Sex)
 table(train$Child, train$Survived, by=train$Sex)
+ggplot(train, aes(Child)) + 
+  geom_bar(aes(fill = Survived )) + 
+  facet_grid(~Sex) + 
+  ggtitle("Child and Sex as the Survival Factors")
 ```
 
 From here, it's also somewhat evident that female children are more likely to survive.
@@ -472,29 +473,11 @@ Preparing the TEST SET
 The test set should possess the same variable definitions and data types as the train and validation set.
 
 ```{r}
-test<-read.csv("test.csv")
-test$Sex <- as.factor(test$Sex)
-test$Pclass <- as.factor(test$Pclass)
-test$Title <-  ifelse(grepl("mr", tolower(test$Name)), 'Mr', 
-                        ifelse(grepl("miss", tolower(test$Name)), 'Miss', 
-                              ifelse(grepl("mrs", tolower(test$Name)), 'Mrs', 
-                                      ifelse(grepl("master", tolower(test$Name)), 'Master','Unknown'))))
 
-test$Title <- as.factor(test$Title)
-age.model<-lm(Age ~ Title + Fare + SibSp + Sex -1, data = test)
-summary(age.model)
-for(i in 1:nrow(test))
-{
-  if(is.na(test[i,"Age"]))
-  {
-    test[i,"Age"] <- predict(age.model, newdata=test[i,])
-  }
-
-}
 summary(test$Age)
 
-test$Age_1 <- ifelse(test$Age<0, (-1*test$Age), test$Age)
-test$Child <- ifelse(test$Age_1<=18,1,0)
+test$Title <- as.factor(test$Title)
+test$Child <- ifelse(test$Age<=18,1,0)
 test$Woman <- ifelse(test$Sex=="female",1,0)
 test$CoW <- ifelse(test$Child==1 | test$Woman==1,1,0) #Child or Woman
 test$CoW <- as.factor(test$CoW)
@@ -502,7 +485,7 @@ test$FamilySize <- test$SibSp + test$Parch + 1
 test$FamilyCat <- cut(test$FamilySize, c(0,1,4,12))
 test$FamilyCat <- as.factor(test$FamilyCat)
 
-
+levels(test$Age) <- levels(dataTrainfe$Age)
 levels(test$Title) <- levels(dataTrainfe$Title)
 levels(test$Sex) <- levels(dataTrainfe$Sex)
 levels(test$CoW) <- levels(dataTrainfe$CoW)
