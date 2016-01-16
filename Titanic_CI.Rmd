@@ -177,6 +177,38 @@ qplot(Age, data=train, geom="density", fill=Pclass, alpha=I(.5),
 
 It looks like First class people were generally older than second class and so was the case with second class with third class.
 
+```{r, echo=FALSE}
+
+# Plot Age grouped by Pclass
+par(mfrow=c(1,2))
+Survivors <-train[train$Survived==1,]
+Perished <-train[train$Survived==0,]
+boxplot(Age ~ Pclass, data =
+Survivors, col = "light blue",
+main="Survived", xlab="Passenger
+Class", ylab="Age")
+boxplot(Age ~ Pclass, data =
+Perished, col = "gray",
+main="Perished", xlab="Passenger
+Class", ylab="Age")
+```
+
+The Mean age of the Survived is less than that of those who perished
+
+
+```{r, echo=FALSE, warning=FALSE}
+combi$Parch<-as.factor(combi$Parch) 
+combi$Survived<- as.factor(combi$Survived) 
+levels(combi$Survived) = rev(levels(combi$Survived)) 
+ggplot(data=subset(combi,!is.na(Survived)),aes(x=Parch,fill=Survived))+geom_bar(aes(y = (..count..)/sum(..count..)),position = "fill")+ coord_flip()+ylab("Survival rate")+xlab("Parent children with passenger")
+
+p <-ggplot(data=subset(combi,!is.na(Survived)),aes(x=SibSp,fill=Survived))+geom_bar(aes(y = (..count..)/sum(..count..)),position = "fill")+ylab("Survival rate")+xlab("Nbre of Sibling or spouse")
+suppressMessages(print(p))
+
+```
+
+Survival is Higher for passengers with Parch=3 or SibSp=1
+
 The next step is to split the Train data into a Training Set & a Validation Set
 
 ```{r}
@@ -225,7 +257,17 @@ set.seed(415)
 fit2<- randomForest(as.factor(Survived) ~ Pclass + Sex + Age + Fare + Embarked + FamId + Parch + SibSp, data=dataTrain,
                     importance=TRUE, ntree=2000)
 varImpPlot(fit2)
+imp <- importance(fit2, type=1)
+featureImportance <- data.frame(Feature=row.names(imp), Importance=imp[,1])
 
+ ggplot(featureImportance, aes(x=reorder(Feature, Importance), y=Importance)) +
+     geom_bar(stat="identity", fill="#53cfff") +
+     coord_flip() + 
+     theme_light(base_size=20) +
+     xlab("") +
+     ylab("Importance") + 
+     ggtitle("Random Forest Feature Importance\n") +
+     theme(plot.title=element_text(size=18))
 dataVal$Pred_rf <- predict(fit2, dataVal)
 Conf_RForest <- confusionMatrix(dataVal$Pred_rf, dataVal$Survived) 
 
@@ -425,6 +467,8 @@ set.seed(415)
 fit2_rf<- randomForest(as.factor(Survived) ~ Pclass+Sex+CoW+FamilyCat+Title, data=dataTrainfe,
                     importance=TRUE, ntree=2000)
 varImpPlot(fit2_rf)
+
+
 prediction$Pred_rffe <- predict(fit2_rf,type="prob",dataValfe) [,2]
 for(i in 1:length(prediction$Pred_rffe )){
   if(prediction$Pred_rffe[i]>0.6){prediction$Pred_rffe[i]<-1}
